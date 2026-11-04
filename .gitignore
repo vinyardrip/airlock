@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# uv
+.uv/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Airlock sandbox (safety net)
+.sandbox/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
