@@ -24,13 +24,13 @@
 - `git push upstream` from sandbox must be impossible even if the wrapper fails (upstream URL = `no_push://`).
 - `airlock enter` must determine the effective version config by mise rules: nearest file to project root wins; on the same level `mise.toml` > `.tool-versions`. If both exist in the same directory — warn, work with `mise.toml`.
 
-- [ ] Task 1.1: Repo skeleton and CLI entrypoint
+- [x] Task 1.1: Repo skeleton and CLI entrypoint
   - `gh repo create airlock --private`.
   - Python package layout (`airlock/` + `tests/` + `pyproject.toml`).
   - `uv tool install --editable` or `~/.local/bin/airlock` symlink.
   - `airlock --version`, `airlock --help`.
 
-- [ ] Task 1.2: Project root detection
+- [x] Task 1.2: Project root detection
   - `airlock enter` without arguments: walk up to `.git`, take `basename` of the directory containing it as the project name.
   - Fallback markers if no `.git`: `mise.toml` / `.tool-versions` / `package.json` / `pyproject.toml` / `.ck/`.
   - If nothing found: clean error, suggest `airlock enter <name>`.
