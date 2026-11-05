@@ -1,17 +1,35 @@
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 from airlock import __version__
 from airlock.project import detect_project_root, looks_like_container
+from airlock.sandbox import SandboxError, create_sandbox
+
+
+def _sandbox_branch(sandbox_path: Path, project_name: str) -> str:
+    """Derive the sandbox branch name from the sandbox directory name."""
+    name = sandbox_path.name
+    if not name.startswith(f"{project_name}_"):
+        return f"sandbox/{name}"
+    sandbox_id = name[len(project_name) + 1 :]
+    # A uniqueness counter (_2, _3, ...) is appended on same-second collisions;
+    # the branch stays sandbox/<timestamp>.
+    parts = sandbox_id.split("_")
+    if len(parts) == 3 and parts[2].isdigit():
+        sandbox_id = f"{parts[0]}_{parts[1]}"
+    return f"sandbox/{sandbox_id}"
 
 
 def cmd_enter(name: str | None) -> int:
-    """Task 1.2: dry-run. Detect project, warn on containers, do not create sandbox."""
+    """Create a sandbox for the current project and enter a subshell in it."""
     if name:
-        print(f"[i] Project: {name} (explicit)")
-        print("    (dry-run: sandbox not created yet)")
-        return 0
+        # Explicit names need the registry lookup (Task 1.6).
+        print("[err] Explicit project names are not supported yet.", file=sys.stderr)
+        print("      cd into a project directory instead.", file=sys.stderr)
+        return 1
 
     root = detect_project_root()
     if root is None:
@@ -39,9 +57,26 @@ def cmd_enter(name: str | None) -> int:
             print("[i] Aborted.", file=sys.stderr)
             return 1
 
-    print(f"[i] Detected project: {root.name}")
-    print(f"    Root: {root}")
-    print("    (dry-run: sandbox not created yet)")
+    try:
+        sandbox_path = create_sandbox(root, root.name)
+    except SandboxError as e:
+        print(f"[err] Sandbox creation failed: {e}", file=sys.stderr)
+        return 1
+
+    print(f"[i] Project: {root.name}")
+    print(f"[i] Sandbox: {sandbox_path}")
+    print(f"[i] Branch: {_sandbox_branch(sandbox_path, root.name)}")
+    print("[i] Entering subshell. Type 'exit' to return.")
+
+    env = os.environ.copy()
+    env["AIRLOCK_ACTIVE"] = "1"
+    env["AIRLOCK_MAIN"] = str(root)
+    env["PS1"] = f"(airlock:{root.name}) \\w $ "
+
+    shell = env.get("SHELL", "/bin/bash")
+    subprocess.run([shell], cwd=sandbox_path, env=env)
+
+    print("[i] Exited sandbox.")
     return 0
 
 
@@ -58,7 +93,7 @@ def main() -> int:
 
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
 
-    enter = subparsers.add_parser("enter", help="Enter a project sandbox (dry-run in 1.2)")
+    enter = subparsers.add_parser("enter", help="Enter an isolated sandbox for the current project")
     enter.add_argument("name", nargs="?", help="Project name (optional)")
 
     args = parser.parse_args()
