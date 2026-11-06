@@ -1,12 +1,18 @@
 # airlock
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Dev-sandbox isolation for internal tools. `airlock` clones the current project
 into an isolated sandbox under `~/sandboxes/`, opens a guarded subshell there,
 and merges the result back into the main working tree only after an explicit
 review step. The main repo is never touched by accident.
 
-Requires: Python 3.11+, git, [mise](https://mise.jdx.dev). Python standard
-library only — no third-party dependencies.
+Repository: <https://github.com/vinyardrip/airlock>
+
+Requires: Python 3.11+, git and [mise](https://mise.jdx.dev) — mise is a hard
+requirement: the version features (`check`, `update`) go through it, and a
+sandbox installs its pinned tools with `mise install` on entry. Python
+standard library only — no third-party dependencies.
 
 ## Install
 
@@ -31,11 +37,14 @@ airlock enter
 ```
 
 The project is cloned into `~/sandboxes/<project>_<id>`, pinned tool versions
-are installed (`mise install`), and you land in a subshell marked
-`(airlock:myproject)`. Everything you do happens in the clone. The main
-working tree is protected: `git checkout`/`switch` are blocked there, pushes
-go only to the sandbox's private bare remote, and repo-level git hooks are
-neutralized.
+are installed (`mise install`), and you land in a subshell with
+`AIRLOCK_ACTIVE=1` and `AIRLOCK_MAIN` set, and with the guarded git wrapper
+(`airlock/bin`) prepended to `PATH`. A `(airlock:myproject)` marker is also
+set in `PS1`, but custom prompt themes (e.g. Powerlevel10k) often override it
+— the environment variables are the reliable marker. Everything you do
+happens in the clone. The main working tree is protected: `git
+checkout`/`switch` are blocked there, pushes go only to the sandbox's private
+bare remote, and repo-level git hooks are neutralized.
 
 ### 2. Know your versions (optional)
 
@@ -51,6 +60,10 @@ For every pinned tool, `airlock` asks mise for the latest version and compares:
 - `[MISSING]` — the project uses a tool (`package.json` engines,
   `requires-python` in `pyproject.toml`) that is not pinned in the version
   config.
+
+These commands rely on mise: without it, `check` degrades gracefully (each
+tool shows `[unknown]`), while `update` fails with an explicit error. If you
+see `[unknown]` on every line, mise is missing or not on `PATH`.
 
 To actually bump a version, do it inside the sandbox: `airlock update python`
 pins `mise latest`, reinstalls the tools and runs the project's tests. The
@@ -116,6 +129,17 @@ with or without `--force`. Before deleting, `airlock` refuses if the tree is
 dirty or the branch holds commits that never reached the bare remote (that
 work would be lost); `--force` bypasses those checks, never the confirmation.
 
+**Publish from the main project:**
+
+```text
+git push
+```
+
+This step is manual and mandatory: sandboxes strictly cannot push to GitHub —
+that is a deliberate security boundary, so nothing can reach the public
+remote from inside a sandbox, even by accident. After the merge, publishing
+happens from the main repo, where you can see exactly what you are pushing.
+
 ### Picking the sandbox (smart selection)
 
 You almost never type the full id. Without an argument, `merge`/`clean` look
@@ -171,10 +195,14 @@ airlock enter
 ```
 
 Проект клонируется в `~/sandboxes/<проект>_<id>`, устанавливаются закреплённые
-версии инструментов (`mise install`), открывается подоболочка с меткой
-`(airlock:myproject)`. Всё, что вы делаете, происходит в клоне. Основное
-рабочее дерево защищено: `git checkout`/`switch` там заблокированы, push уходит
-только в приватный bare-remote песочницы, хуки git в репозитории отключены.
+версии инструментов (`mise install`), и открывается подоболочка с переменными
+`AIRLOCK_ACTIVE=1` и `AIRLOCK_MAIN`, а в начало `PATH` добавляется защищающая
+git-обёртка (`airlock/bin`). Метка `(airlock:myproject)` выставляется в `PS1`,
+но пользовательские темы промпта (например, Powerlevel10k) часто её
+перебивают — надёжный признак песочницы именно переменные окружения. Всё, что
+вы делаете, происходит в клоне. Основное рабочее дерево защищено: `git
+checkout`/`switch` там заблокированы, push уходит только в приватный
+bare-remote песочницы, хуки git в репозитории отключены.
 
 ### 2. Версии (по желанию)
 
@@ -189,6 +217,10 @@ airlock check
   latest` (например, python `3.12` против `3.15`); код возврата `1`;
 - `[MISSING]` — проект использует инструмент (`package.json` engines,
   `requires-python`), который не закреплён в конфиге версий.
+
+Эти команды полагаются на mise: без него `check` деградирует мягко (у каждого
+инструмента статус `[unknown]`), а `update` завершается явной ошибкой. Если у
+всех инструментов статус `[unknown]` — mise отсутствует или не в `PATH`.
 
 Обновить версию можно внутри песочницы: `airlock update python` закрепляет
 `mise latest`, переустанавливает инструменты и прогоняет тесты проекта.
@@ -254,6 +286,18 @@ airlock clean
 если дерево «грязное» или есть коммиты, не дошедшие до bare-remote (эта работа
 была бы потеряна); `--force` обходит проверки, но не подтверждение.
 
+**Опубликуйте из основного проекта:**
+
+```text
+git push
+```
+
+Этот шаг выполняется вручную и обязателен: из песочницы push в GitHub
+принципиально невозможен — это осознанная граница безопасности, поэтому из
+песочницы ничего не может попасть в публичный удалённый репозиторий, даже
+случайно. После merge публикация выполняется из основного репозитория, где
+вы видите ровно то, что отправляете.
+
 ### Выбор песочницы
 
 Полный id вводить не нужно. Без аргумента `merge`/`clean` смотрят на текущий
@@ -288,8 +332,14 @@ airlock merge                  # просмотр diff, подтверждени
 
 ## Status
 
-Phase 1 (core) is complete and piloted; Phase 2 (self-bootstrap) is documented
-above; the daily workflow now lives in this README (Task 5.2, workflow part).
-Architecture decisions and limitations are tracked in `.ck/PLAN.md`; the
-remaining Task 5.2 pieces (security model, limitations) land with the rest of
-Phase 5.
+Phase 5 is complete. Shipped and piloted: the core cycle (enter → work →
+merge → clean) on Python, Bash and PHP stacks, self-bootstrap of the airlock
+repo itself, smart sandbox selection, and this documentation set —
+[README.md](README.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md)
+and `.ck/PLAN.md` (decision history). Future work — `mise.toml` ranges,
+other tool managers, a single-binary build — is tracked in
+[ROADMAP.md](ROADMAP.md).
+
+## License
+
+[MIT](LICENSE) — © 2026 vinyardrip.
