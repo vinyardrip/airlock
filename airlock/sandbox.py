@@ -9,6 +9,7 @@ Sandbox layout:
 
 from __future__ import annotations
 
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ __all__ = [
     "sandbox_root",
     "bare_remote_path",
     "new_sandbox_id",
+    "parse_sandbox_name",
     "create_sandbox",
 ]
 
@@ -38,9 +40,9 @@ def _run(cmd: list[str], cwd: Path | None = None) -> str:
     return proc.stdout
 
 
-def sandbox_root() -> Path:
+def sandbox_root(home: Path | None = None) -> Path:
     """Return <home>/sandboxes/, creating it if missing."""
-    root = Path.home() / "sandboxes"
+    root = (home or Path.home()) / "sandboxes"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -55,6 +57,24 @@ def bare_remote_path(project_name: str) -> Path:
 def new_sandbox_id() -> str:
     """Return a unique-per-second sandbox id."""
     return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+# <project>_<YYYYMMDD_HHMMSS>, with an optional _<n> uniqueness counter.
+_SANDBOX_NAME_RE = re.compile(r"^(?P<project>.+)_(?P<id>\d{8}_\d{6})(?:_(?P<counter>\d+))?$")
+
+
+def parse_sandbox_name(name: str) -> tuple[str, str]:
+    """Split '<project>_<YYYYMMDD_HHMMSS>[_<n>]' into (project_name, sandbox_id).
+
+    The counter suffix is stripped: same-second collisions keep the original
+    branch id, mirroring the branch derivation in cli._sandbox_branch.
+    """
+    match = _SANDBOX_NAME_RE.match(name)
+    if match is None:
+        raise SandboxError(
+            f"invalid sandbox name {name!r}; expected '<project>_<YYYYMMDD_HHMMSS>'"
+        )
+    return match.group("project"), match.group("id")
 
 
 def _origin_url(project_root: Path) -> str | None:

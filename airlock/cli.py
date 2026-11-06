@@ -5,8 +5,17 @@ import sys
 from pathlib import Path
 
 from airlock import __version__
+from airlock.git_wrapper import wrapper_bin_dir
+from airlock.merge import MergeError, merge_sandbox
 from airlock.project import detect_project_root, looks_like_container
-from airlock.sandbox import SandboxError, create_sandbox
+from airlock.registry import CleanError, clean_sandbox, format_sandbox_table, list_sandboxes
+from airlock.sandbox import SandboxError, create_sandbox, parse_sandbox_name
+from airlock.versioning import (
+    VersioningError,
+    check_versions,
+    migrate_versions,
+    update_tool,
+)
 
 
 def _sandbox_branch(sandbox_path: Path, project_name: str) -> str:
@@ -14,12 +23,13 @@ def _sandbox_branch(sandbox_path: Path, project_name: str) -> str:
     name = sandbox_path.name
     if not name.startswith(f"{project_name}_"):
         return f"sandbox/{name}"
-    sandbox_id = name[len(project_name) + 1 :]
+    try:
+        _, sandbox_id = parse_sandbox_name(name)
+    except SandboxError:
+        # Manually renamed directory: keep the old lenient behaviour.
+        return f"sandbox/{name[len(project_name) + 1 :]}"
     # A uniqueness counter (_2, _3, ...) is appended on same-second collisions;
     # the branch stays sandbox/<timestamp>.
-    parts = sandbox_id.split("_")
-    if len(parts) == 3 and parts[2].isdigit():
-        sandbox_id = f"{parts[0]}_{parts[1]}"
     return f"sandbox/{sandbox_id}"
 
 
@@ -72,12 +82,76 @@ def cmd_enter(name: str | None) -> int:
     env["AIRLOCK_ACTIVE"] = "1"
     env["AIRLOCK_MAIN"] = str(root)
     env["PS1"] = f"(airlock:{root.name}) \\w $ "
+    # Guarded git wrapper (Task 1.4): shadow `git` inside the sandbox so the
+    # push/checkout/config guardrails apply before the real git runs.
+    env["PATH"] = f"{wrapper_bin_dir()}{os.pathsep}{env.get('PATH', '')}"
 
     shell = env.get("SHELL", "/bin/bash")
     subprocess.run([shell], cwd=sandbox_path, env=env)
 
     print("[i] Exited sandbox.")
     return 0
+
+
+def cmd_merge(name: str) -> int:
+    """Merge a sandbox branch into the current (main) project."""
+    try:
+        return merge_sandbox(name)
+    except MergeError as exc:
+        print(f"[err] {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_list() -> int:
+    """Print all sandboxes as an aligned table."""
+    infos, skipped = list_sandboxes()
+    if skipped:
+        print(f"[!] {skipped} unrecognized entries in ~/sandboxes/ not listed.", file=sys.stderr)
+    if not infos:
+        print("[i] No sandboxes.")
+        return 0
+    print(format_sandbox_table(infos))
+    return 0
+
+
+def cmd_clean(name: str, force: bool = False) -> int:
+    """Delete a sandbox after strict checks (or --force + typed 'yes')."""
+    try:
+        return clean_sandbox(name, force=force)
+    except CleanError as exc:
+        print(f"[err] {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_check() -> int:
+    """Compare pinned versions with 'mise latest'; report coverage gaps."""
+    root = detect_project_root()
+    if root is None:
+        print("[err] Cannot detect project root.", file=sys.stderr)
+        return 1
+    try:
+        return check_versions(root)
+    except VersioningError as exc:
+        print(f"[err] {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_update(tool: str) -> int:
+    """Update a pinned tool to 'mise latest' (sandbox only)."""
+    try:
+        return update_tool(tool)
+    except VersioningError as exc:
+        print(f"[err] {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_migrate(dry_run: bool = False, force: bool = False) -> int:
+    """Convert .tool-versions to mise.toml (narrow, strict scope)."""
+    try:
+        return migrate_versions(dry_run=dry_run, force=force)
+    except VersioningError as exc:
+        print(f"[err] {exc}", file=sys.stderr)
+        return 1
 
 
 def main() -> int:
@@ -96,10 +170,55 @@ def main() -> int:
     enter = subparsers.add_parser("enter", help="Enter an isolated sandbox for the current project")
     enter.add_argument("name", nargs="?", help="Project name (optional)")
 
+    merge = subparsers.add_parser("merge", help="Merge a sandbox branch into the main project")
+    merge.add_argument("sandbox", help="Sandbox name (<project>_<id>)")
+
+    subparsers.add_parser("list", help="List sandboxes with branch and status")
+
+    clean = subparsers.add_parser(
+        "clean", help="Delete a sandbox (refuses when dirty or unpushed)"
+    )
+    clean.add_argument("sandbox", help="Sandbox name (<project>_<id>)")
+    clean.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass dirty/unpushed checks (still requires typing 'yes')",
+    )
+
+    subparsers.add_parser("check", help="Check pinned versions against 'mise latest'")
+
+    update = subparsers.add_parser(
+        "update", help="Update a pinned tool to 'mise latest' (sandbox only)"
+    )
+    update.add_argument("tool", help="Tool to update, e.g. python")
+
+    migrate = subparsers.add_parser(
+        "migrate", help="Convert .tool-versions to mise.toml (narrow scope)"
+    )
+    migrate.add_argument("target", choices=("versions",), help="What to migrate")
+    migrate.add_argument(
+        "--dry-run", action="store_true", help="Print the would-be mise.toml and exit"
+    )
+    migrate.add_argument(
+        "--force", action="store_true", help="Skip the confirmation prompt (non-interactive)"
+    )
+
     args = parser.parse_args()
 
     if args.command == "enter":
         return cmd_enter(args.name)
+    if args.command == "merge":
+        return cmd_merge(args.sandbox)
+    if args.command == "list":
+        return cmd_list()
+    if args.command == "clean":
+        return cmd_clean(args.sandbox, force=args.force)
+    if args.command == "check":
+        return cmd_check()
+    if args.command == "update":
+        return cmd_update(args.tool)
+    if args.command == "migrate":
+        return cmd_migrate(dry_run=args.dry_run, force=args.force)
 
     parser.print_help()
     return 0

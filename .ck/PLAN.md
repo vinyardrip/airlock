@@ -35,7 +35,7 @@
   - Fallback markers if no `.git`: `mise.toml` / `.tool-versions` / `package.json` / `pyproject.toml` / `.ck/`.
   - If nothing found: clean error, suggest `airlock enter <name>`.
 
-- [ ] Task 1.3: Sandbox creation (`airlock enter`)
+- [>] Task 1.3: Sandbox creation (`airlock enter`)
   - Create `~/sandboxes/<project>_<id>/` (id = short timestamp or short hash).
   - `git clone --local` from the main directory.
   - Configure `origin` = bare-remote at `~/.local/share/airlock/remotes/<project>.git` (create if missing).
@@ -47,6 +47,10 @@
   - Wrapper script in `~/.local/share/airlock/bin/git` (prepended to `PATH` in subshell).
   - Block `git push` to `upstream` (any remote whose push URL is not the bare-remote).
   - Block `git checkout`/`switch` in the main directory (detect: `pwd` outside sandbox and sandbox is active).
+  - Block dangerous global commands: `git config --global`, `git remote add upstream`, `git remote set-url upstream`.
+  - Environment scrubbing: unset all `GIT_*` env variables before calling the real git (prevents `GIT_SSH_COMMAND` injection).
+  - Force `core.hooksPath=/dev/null` and `diff.external=` (neutralize repo-level hooks and external diffs).
+  - Log blocked commands to `.sandbox/airlock_git_guard.log` for traceability.
   - Pass through everything else to the real `git`.
 
 - [ ] Task 1.5: Exit and merge (`airlock exit`)
@@ -191,6 +195,7 @@
   - Quick start: `airlock enter` in a project.
   - Common workflows: feature dev, version update, merge.
   - Limitations (explicit): no publication, no CI matrix, supports only `.tool-versions` + `mise.toml` (read), no other tool managers.
+  - Security: `airlock` is designed for TRUSTED local repositories only. Cloning or running code from untrusted remote repositories is out of scope. Git wrapper blocks global config changes, hooks, and pushes to GitHub.
 
 - [ ] Task 5.3: Backlog for future (not now)
   - `mise.toml` full support (ranges, `[env]`, `[tasks]`) — if needed.
