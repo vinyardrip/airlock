@@ -245,6 +245,12 @@ def test_clean_invalid_name(fake_home):
 
 
 def test_cmd_clean_routes_and_reports_errors(monkeypatch, capsys):
+    from airlock.registry import SandboxInfo
+
+    dummy = SandboxInfo(
+        "proj_20260101_000000", "proj", "20260101_000000", "sandbox/20260101_000000", "[clean]"
+    )
+    monkeypatch.setattr(cli, "resolve_sandbox", lambda arg, **kw: dummy)
     calls = {}
 
     def fake_clean(name, force=False):

@@ -1,4 +1,4 @@
-"""Sandbox listing and removal (Task 1.6).
+"""Sandbox listing, selection and removal (Task 1.6 + smart selection).
 
 `airlock list` — every sandbox under <home>/sandboxes/ as an aligned table
 (Project, ID, Branch, Status) where Status is [clean] or [dirty].
@@ -7,6 +7,10 @@
 while the tree is dirty or the sandbox branch has commits not pushed to the
 bare remote. --force bypasses those checks but still requires typing 'yes';
 even a fully clean sandbox is never deleted without that confirmation.
+
+`resolve_sandbox` — shared smart selection for merge/clean: an omitted or
+partial argument is resolved against the sandboxes of the current project,
+auto-selecting when unambiguous and offering a numbered list otherwise.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ __all__ = [
     "SandboxInfo",
     "list_sandboxes",
     "format_sandbox_table",
+    "resolve_sandbox",
     "clean_sandbox",
 ]
 
@@ -179,3 +184,79 @@ def clean_sandbox(
     shutil.rmtree(sandbox)
     print(f"[i] Removed sandbox {sandbox}")
     return 0
+
+
+def resolve_sandbox(
+    arg: str | None,
+    *,
+    current_project: str | None = None,
+    home: Path | None = None,
+    input_fn: Callable[[str], str] | None = None,
+) -> SandboxInfo | None:
+    """Resolve an omitted or partial sandbox argument to one sandbox.
+
+    - arg is None: restrict to sandboxes of `current_project`; a single one
+      is auto-selected, several are offered as a numbered list (Enter -> 1).
+    - arg given: substring match against sandbox names; one exact match is
+      returned silently, a single partial match is auto-selected with a
+      notice, several matches are offered as a numbered list.
+
+    Ctrl+C / EOF abort with "[i] Aborted.". Returns None (after printing an
+    [err]/[i] line) when nothing matches or the user aborted.
+    """
+    infos, _skipped = list_sandboxes(home)
+    if arg is None:
+        if current_project is None:
+            print(
+                "[err] cannot detect the current project; pass a sandbox name",
+                file=sys.stderr,
+            )
+            return None
+        candidates = [info for info in infos if info.project == current_project]
+        if not candidates:
+            print(
+                f"[err] no sandboxes found for project '{current_project}'",
+                file=sys.stderr,
+            )
+            return None
+        if len(candidates) == 1:
+            print(f"[i] Auto-selected sandbox: {candidates[0].name}")
+            return candidates[0]
+        return _select_interactive(
+            candidates, f"Multiple sandboxes for '{current_project}'", input_fn
+        )
+
+    candidates = [info for info in infos if arg in info.name]
+    if not candidates:
+        print(f"[err] no sandbox matches '{arg}'", file=sys.stderr)
+        return None
+    if len(candidates) == 1:
+        if candidates[0].name != arg:
+            print(f"[i] Auto-selected sandbox: {candidates[0].name}")
+        return candidates[0]
+    return _select_interactive(candidates, f"Multiple sandboxes match '{arg}'", input_fn)
+
+
+def _select_interactive(
+    candidates: list[SandboxInfo],
+    header: str,
+    input_fn: Callable[[str], str] | None,
+) -> SandboxInfo | None:
+    """Numbered picker; empty input picks 1, invalid input re-prompts."""
+    print(f"[i] {header}:")
+    for number, info in enumerate(candidates, 1):
+        print(f"  {number}) {info.name}  {info.branch}  {info.status}")
+    if input_fn is None:
+        input_fn = input
+    while True:
+        try:
+            raw = input_fn(f"Select sandbox [1-{len(candidates)}] (default 1): ")
+        except (EOFError, KeyboardInterrupt):
+            print("\n[i] Aborted.")
+            return None
+        raw = raw.strip()
+        if not raw:
+            return candidates[0]
+        if raw.isdigit() and 1 <= int(raw) <= len(candidates):
+            return candidates[int(raw) - 1]
+        print(f"[!] invalid selection: {raw!r}", file=sys.stderr)

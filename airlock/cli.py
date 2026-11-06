@@ -8,7 +8,13 @@ from airlock import __version__
 from airlock.git_wrapper import wrapper_bin_dir
 from airlock.merge import MergeError, merge_sandbox
 from airlock.project import detect_project_root, looks_like_container
-from airlock.registry import CleanError, clean_sandbox, format_sandbox_table, list_sandboxes
+from airlock.registry import (
+    CleanError,
+    clean_sandbox,
+    format_sandbox_table,
+    list_sandboxes,
+    resolve_sandbox,
+)
 from airlock.sandbox import SandboxError, create_sandbox, parse_sandbox_name
 from airlock.versioning import (
     VersioningError,
@@ -93,10 +99,18 @@ def cmd_enter(name: str | None) -> int:
     return 0
 
 
-def cmd_merge(name: str) -> int:
+def _current_project_name() -> str | None:
+    root = detect_project_root()
+    return root.name if root is not None else None
+
+
+def cmd_merge(name: str | None) -> int:
     """Merge a sandbox branch into the current (main) project."""
+    selected = resolve_sandbox(name, current_project=_current_project_name())
+    if selected is None:
+        return 1
     try:
-        return merge_sandbox(name)
+        return merge_sandbox(selected.name)
     except MergeError as exc:
         print(f"[err] {exc}", file=sys.stderr)
         return 1
@@ -114,10 +128,13 @@ def cmd_list() -> int:
     return 0
 
 
-def cmd_clean(name: str, force: bool = False) -> int:
+def cmd_clean(name: str | None, force: bool = False) -> int:
     """Delete a sandbox after strict checks (or --force + typed 'yes')."""
+    selected = resolve_sandbox(name, current_project=_current_project_name())
+    if selected is None:
+        return 1
     try:
-        return clean_sandbox(name, force=force)
+        return clean_sandbox(selected.name, force=force)
     except CleanError as exc:
         print(f"[err] {exc}", file=sys.stderr)
         return 1
@@ -171,14 +188,14 @@ def main() -> int:
     enter.add_argument("name", nargs="?", help="Project name (optional)")
 
     merge = subparsers.add_parser("merge", help="Merge a sandbox branch into the main project")
-    merge.add_argument("sandbox", help="Sandbox name (<project>_<id>)")
+    merge.add_argument("sandbox", nargs="?", help="Sandbox name or partial id (omit to pick)")
 
     subparsers.add_parser("list", help="List sandboxes with branch and status")
 
     clean = subparsers.add_parser(
         "clean", help="Delete a sandbox (refuses when dirty or unpushed)"
     )
-    clean.add_argument("sandbox", help="Sandbox name (<project>_<id>)")
+    clean.add_argument("sandbox", nargs="?", help="Sandbox name or partial id (omit to pick)")
     clean.add_argument(
         "--force",
         action="store_true",

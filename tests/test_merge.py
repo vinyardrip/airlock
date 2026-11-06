@@ -315,6 +315,12 @@ def test_mise_install_failure_warns_but_merge_succeeds(project_pair, monkeypatch
 
 
 def test_cmd_merge_routes_to_merge_sandbox(monkeypatch):
+    from airlock.registry import SandboxInfo
+
+    dummy = SandboxInfo(
+        "proj_20260101_000000", "proj", "20260101_000000", "sandbox/20260101_000000", "[clean]"
+    )
+    monkeypatch.setattr(cli, "resolve_sandbox", lambda arg, **kw: dummy)
     called = {}
 
     def fake_merge_sandbox(name):
