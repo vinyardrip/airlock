@@ -99,15 +99,15 @@
 
 **Objective:** Prove `airlock` is stack-agnostic by using it on its own repo.
 
-- [>] Task 2.1: `airlock enter --self`
+- [x] Task 2.1: `airlock enter --self`
   - From inside the `airlock` repo, create a sandbox of `airlock` itself.
   - Same clone+bare mechanics, no special-casing.
 
-- [ ] Task 2.2: Run `airlock` tests inside its own sandbox
+- [x] Task 2.2: Run `airlock` tests inside its own sandbox
   - `pytest` (or the project's test runner) inside the sandbox.
   - Verify that tests pass and that the sandbox is isolated (main repo untouched).
 
-- [ ] Task 2.3: Document the bootstrap pattern
+- [x] Task 2.3: Document the bootstrap pattern
   - README section: "airlock tests itself via `airlock enter --self`".
   - This is the proof that the tool is generic, not hardcoded to `ck`.
 
@@ -122,22 +122,22 @@
 - Keep a compressed backup of the experimental repo until Phase 3 is validated.
 - No changes to `ck` code, `.sandbox/`, or `ck-dev` in this phase.
 
-- [ ] Task 3.1: Audit and backup
+- [x] Task 3.1: Audit and backup
   - Diff the experimental repo against the SSoT repo (exclude `.git/`, `.sandbox/`).
   - Create a tarball backup of the experimental repo (`ck_sandbox_backup_$(date +%s).tar.gz`) in `~/.local/share/airlock/backups/` (not `/tmp`).
   - Run `git status --porcelain` in SSoT; must be empty before proceeding.
 
-- [ ] Task 3.2: Merge core logic and scripts
+- [x] Task 3.2: Merge core logic and scripts
   - Migrate any experimental bash scripts, configs, or CLI improvements from the sandbox into the SSoT repo.
   - Run `shellcheck` on migrated scripts.
   - Ensure English documentation and comment standards are maintained.
 
-- [ ] Task 3.3: Migrate existing test cases
+- [x] Task 3.3: Migrate existing test cases
   - Identify valuable testing assets in the experimental repo's `.sandbox/`.
   - Do NOT move them into SSoT `.sandbox/` (that directory is for `ck` test isolation, not a storage).
   - If assets are reusable — move to `tests/fixtures/`; otherwise archive with the backup.
 
-- [ ] Task 3.4: Validation and archival
+- [x] Task 3.4: Validation and archival
   - Run the baseline `ck` test suite (`pytest`) in SSoT; must pass.
   - `git bundle create` the experimental repo history into `~/.local/share/airlock/backups/`.
   - Remove the experimental repo directory only after Phase 3 is validated and the bundle is confirmed readable.
@@ -152,25 +152,25 @@
 - Sequential rollout: fully validate one project before starting the next.
 - Never touch client/customer directories (`cpukomplekt`, `steptec`, `evakuatori`) — allowlist only the four named tools.
 
-- [ ] Task 4.1: Audit internal toolchain
+- [x] Task 4.1: Audit internal toolchain
   - Map current repo locations and test setups for `dpx`, `vite-bridge`, `vite-njk-trace`, `njk-frontmatter`.
   - Identify any split-brain repos among them (same as Phase 3 for `ck`).
 
-- [ ] Task 4.2: Migrate `dpx` (bash/CLI)
+- [x] Task 4.2: Migrate `dpx` (bash/CLI)
   - `airlock enter` → tests → `airlock exit --merge`.
   - Validate bash stack runner.
 
-- [ ] Task 4.3: Migrate `vite-bridge`
+- [x] Task 4.3: Migrate `vite-bridge`
   - `airlock enter` → tests → `airlock exit --merge`.
   - Validate node stack runner (pnpm).
 
-- [ ] Task 4.4: Migrate `vite-njk-trace`
+- [x] Task 4.4: Migrate `vite-njk-trace`
   - Same cycle.
 
-- [ ] Task 4.5: Migrate `njk-frontmatter`
+- [x] Task 4.5: Migrate `njk-frontmatter`
   - Same cycle.
 
-- [ ] Task 4.6: Stack-agnostic runner check
+- [x] Task 4.6: Stack-agnostic runner check
   - Confirm that `airlock update` and test detection work for bash, node, python, mixed.
   - Document any per-project overrides needed (e.g., custom test command in `.airlock.toml`).
 
@@ -180,7 +180,7 @@
 
 **Objective:** Write down architectural decisions so they are not re-litigated in six months.
 
-- [ ] Task 5.1: `airlock.md` (EN + RU)
+- [x] Task 5.1: `airlock.md` (EN + RU)
   - Architecture: clone+bare (and why not worktree — history isolation, not push blocking).
   - Sandbox layout: `~/sandboxes/<project>_<id>/`, bare-remotes in `~/.local/share/airlock/remotes/`.
   - Control: `enter/exit/list/clean`, subshell with `PS1` marker.
@@ -190,14 +190,14 @@
   - `check`/`update`: outdated-version detection, coverage check.
   - Relationship with `ck`: `airlock` is standalone, `ck-dev`/`.sandbox/` untouched (different purpose).
 
-- [ ] Task 5.2: README (EN + RU)
+- [x] Task 5.2: README (EN + RU)
   - Install (local script, `git pull` to update).
   - Quick start: `airlock enter` in a project.
   - Common workflows: feature dev, version update, merge.
   - Limitations (explicit): no publication, no CI matrix, supports only `.tool-versions` + `mise.toml` (read), no other tool managers.
   - Security: `airlock` is designed for TRUSTED local repositories only. Cloning or running code from untrusted remote repositories is out of scope. Git wrapper blocks global config changes, hooks, and pushes to GitHub.
 
-- [ ] Task 5.3: Backlog for future (not now)
+- [x] Task 5.3: Backlog for future (not now)
   - `mise.toml` full support (ranges, `[env]`, `[tasks]`) — if needed.
   - Support for other tool managers (asdf without mise, nvm, pyenv) — if the tool ever goes public.
   - Public release (PyPI, curl|bash) — explicitly out of scope for now.

@@ -1,6 +1,6 @@
 [project]
 name = "airlock"
-version = "0.1.0"
+version = "1.0.0"
 description = "Dev-sandbox isolation for internal tools"
 requires-python = ">=3.11"
 dependencies = []
