@@ -5,6 +5,9 @@ description = "Dev-sandbox isolation for internal tools"
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [project.scripts]
 airlock = "airlock.cli:main"
 
