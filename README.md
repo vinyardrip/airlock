@@ -22,8 +22,38 @@ cd airlock
 pip install -e .          # add '.[dev]' to also get the test suite (pytest)
 ```
 
-Updates are a `git pull` in that directory — there is no PyPI release, by
-design (see `.ck/PLAN.md`, Phase 5).
+There is no PyPI release, by design (see `.ck/PLAN.md`, Phase 5).
+
+### Update
+
+```text
+cd ~/projects/my/airlock
+git pull
+```
+
+The install is editable (`pip install -e`), so pulled changes apply
+immediately — no reinstall step. One exception: if the update changed
+`pyproject.toml` (dependencies), run `pip install -e .` once more.
+
+To see which version you are on:
+
+```text
+airlock --version       # e.g. airlock 0.1.0
+git log -1              # the last commit pulled into the repo
+```
+
+Since releases are git-based, `git log -1` is the real "what changed" pointer.
+
+### Uninstall
+
+```text
+pip uninstall airlock                          # or: uv tool uninstall airlock
+rm -rf ~/projects/my/airlock                   # the cloned repo
+rm -rf ~/sandboxes/ ~/.local/share/airlock/    # optional: sandboxes + bare remotes
+```
+
+Before the optional last line, run `airlock list` and merge what you need —
+sandboxes and bare remotes are unrecoverable once removed.
 
 ## Daily usage
 
@@ -329,6 +359,48 @@ airlock merge                  # просмотр diff, подтверждени
 закреплённый Python (и остальные инструменты) готовы к работе. Файлы из
 `.gitignore` (например, `.venv`) не клонируются — тесты запускаются через те
 же mise-шимы, что и в основном репозитории.
+
+## Установка, обновление и удаление
+
+```text
+git clone https://github.com/vinyardrip/airlock.git
+cd airlock
+pip install -e .          # с '.[dev]' — ещё и тесты (pytest)
+```
+
+Публикации на PyPI нет — по задумке (см. `.ck/PLAN.md`, Phase 5).
+
+### Обновление
+
+```text
+cd ~/projects/my/airlock
+git pull
+```
+
+Установка редактируемая (`pip install -e`), поэтому изменения применяются
+сразу — переустановка не нужна. Исключение: если в обновлении менялся
+`pyproject.toml` (зависимости), один раз выполните `pip install -e .`.
+
+Текущая версия:
+
+```text
+airlock --version       # например: airlock 0.1.0
+git log -1              # последний коммит, попавший в репозиторий
+```
+
+Релизы идут через git, поэтому `git log -1` — фактический указатель «что
+изменилось».
+
+### Удаление
+
+```text
+pip uninstall airlock                          # или: uv tool uninstall airlock
+rm -rf ~/projects/my/airlock                   # клон репозитория
+rm -rf ~/sandboxes/ ~/.local/share/airlock/    # опционально: песочницы и bare-remotes
+```
+
+Перед последним (опциональным) шагом выполните `airlock list` и слейте нужное:
+песочницы и bare-remotes после удаления восстановить нельзя.
 
 ## Status
 
