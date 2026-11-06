@@ -35,7 +35,7 @@
   - Fallback markers if no `.git`: `mise.toml` / `.tool-versions` / `package.json` / `pyproject.toml` / `.ck/`.
   - If nothing found: clean error, suggest `airlock enter <name>`.
 
-- [>] Task 1.3: Sandbox creation (`airlock enter`)
+- [x] Task 1.3: Sandbox creation (`airlock enter`)
   - Create `~/sandboxes/<project>_<id>/` (id = short timestamp or short hash).
   - `git clone --local` from the main directory.
   - Configure `origin` = bare-remote at `~/.local/share/airlock/remotes/<project>.git` (create if missing).
@@ -43,7 +43,7 @@
   - Run `mise install` in the sandbox (versions from the effective config).
   - Launch subshell: `cd` into sandbox, `PS1` marker (`(airlock:ck) $`), `PATH` prepended with wrapper `git`.
 
-- [ ] Task 1.4: Git wrapper (guardrails)
+- [x] Task 1.4: Git wrapper (guardrails)
   - Wrapper script in `~/.local/share/airlock/bin/git` (prepended to `PATH` in subshell).
   - Block `git push` to `upstream` (any remote whose push URL is not the bare-remote).
   - Block `git checkout`/`switch` in the main directory (detect: `pwd` outside sandbox and sandbox is active).
@@ -53,42 +53,42 @@
   - Log blocked commands to `.sandbox/airlock_git_guard.log` for traceability.
   - Pass through everything else to the real `git`.
 
-- [ ] Task 1.5: Exit and merge (`airlock exit`)
+- [x] Task 1.5: Exit and merge (`airlock exit`)
   - `exit` from subshell → return to main directory.
   - `airlock exit --merge` (or `airlock merge <project>_<id>`): show diff of version configs separately, then `git fetch <bare> && git merge <branch>` in the main directory.
   - On merge: run `mise install` / `pnpm install` / `uv sync` in the main directory as needed.
 
-- [ ] Task 1.6: `airlock list` and `airlock clean`
+- [x] Task 1.6: `airlock list` and `airlock clean`
   - `list`: active sandboxes under `~/sandboxes/`, with project name, id, branch, `git status --porcelain` summary.
   - `clean <project>_<id>`: refuse if uncommitted changes or unpushed commits; `--force` to override (with confirmation).
 
-- [ ] Task 1.7: Version adapter (read-only, both formats)
+- [x] Task 1.7: Version adapter (read-only, both formats)
   - Module `airlock/versioning/` with a common interface: `read_versions(project_root) -> dict`.
   - `.tool-versions` parser (simple `tool version` lines).
   - `mise.toml` reader via `tomllib` (stdlib).
   - Effective config resolution: nearest file wins, `mise.toml` > `.tool-versions` on the same level, warn on both-in-same-dir.
 
-- [ ] Task 1.8: `airlock check`
+- [x] Task 1.8: `airlock check`
   - For each tool in the effective config: compare to current LTS/stable (`mise latest <tool>`).
   - Flag outdated versions (policy: configurable in `~/.config/airlock/policy.toml`, default: warn if > 1 major behind LTS).
   - Coverage check: tools used by the project (from `package.json` engines, `pyproject.toml` requires-python, `Cargo.toml`) but absent from the effective config → warn.
   - Suggest `airlock migrate versions` if `.tool-versions` exists and `mise.toml` does not.
 
-- [ ] Task 1.9: `airlock update <tool>`
+- [x] Task 1.9: `airlock update <tool>`
   - Inside sandbox only (refuse in main directory).
   - Update `.tool-versions` to current LTS/stable for that tool.
   - Run `mise install` in the sandbox.
   - Run the project's test command (detect: `package.json` scripts.test, `pyproject.toml` pytest, `Makefile test`, `tests/run.sh`).
   - Report pass/fail; leave changes in sandbox for merge.
 
-- [ ] Task 1.10: `airlock migrate versions [--dry-run]`
+- [x] Task 1.10: `airlock migrate versions [--dry-run]`
   - Narrow scope: simple `.tool-versions` (`tool version` per line) → `mise.toml` (`tool = "version"`).
   - Refuse on: `path:`, `ref:`, fallback lists, existing `mise.toml` with sections other than `[tools]`.
   - `--dry-run`: show what would be written.
   - Confirmation prompt; non-interactive without `--force` → refuse.
   - README must state explicitly: what it does, what it does NOT do, and that unsupported cases must be migrated by hand.
 
-- [ ] Task 1.11: Pilot validation on context-keeper
+- [x] Task 1.11: Pilot validation on context-keeper
   - Full cycle: `airlock enter` in `context-keeper` → make a small feature → `airlock update <tool>` (dry-run at least) → run `ck` tests inside sandbox → `airlock exit --merge` → verify main directory is untouched except merged changes.
   - Verify guardrails: `git push upstream` fails, `git checkout` in main directory fails while sandbox active, `airlock clean` refuses with uncommitted changes.
   - Verify version config diff is shown separately on merge.
@@ -99,7 +99,7 @@
 
 **Objective:** Prove `airlock` is stack-agnostic by using it on its own repo.
 
-- [ ] Task 2.1: `airlock enter --self`
+- [>] Task 2.1: `airlock enter --self`
   - From inside the `airlock` repo, create a sandbox of `airlock` itself.
   - Same clone+bare mechanics, no special-casing.
 
