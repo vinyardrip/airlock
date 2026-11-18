@@ -16,6 +16,7 @@ from airlock.registry import (
     resolve_sandbox,
 )
 from airlock.sandbox import SandboxError, create_sandbox, parse_sandbox_name
+from airlock.shell import base_info, sandbox_zdotdir
 from airlock.versioning import (
     VersioningError,
     check_versions,
@@ -37,6 +38,14 @@ def _sandbox_branch(sandbox_path: Path, project_name: str) -> str:
     # A uniqueness counter (_2, _3, ...) is appended on same-second collisions;
     # the branch stays sandbox/<timestamp>.
     return f"sandbox/{sandbox_id}"
+
+
+def _sandbox_id(sandbox_path: Path) -> str:
+    """Return the sandbox id for AIRLOCK_SANDBOX, tolerating renamed dirs."""
+    try:
+        return parse_sandbox_name(sandbox_path.name)[1]
+    except SandboxError:
+        return sandbox_path.name
 
 
 def cmd_enter(name: str | None) -> int:
@@ -73,6 +82,10 @@ def cmd_enter(name: str | None) -> int:
             print("[i] Aborted.", file=sys.stderr)
             return 1
 
+    # Captured before the clone: the base commit and branch the sandbox is
+    # derived from. The shim uses them to report when the main copy advances.
+    base_sha, base_ref = base_info(root)
+
     try:
         sandbox_path = create_sandbox(root, root.name)
     except SandboxError as e:
@@ -87,13 +100,20 @@ def cmd_enter(name: str | None) -> int:
     env = os.environ.copy()
     env["AIRLOCK_ACTIVE"] = "1"
     env["AIRLOCK_MAIN"] = str(root)
+    env["AIRLOCK_SANDBOX"] = _sandbox_id(sandbox_path)
+    env["AIRLOCK_BASE_SHA"] = base_sha
+    env["AIRLOCK_BASE_REF"] = base_ref
+    env["AIRLOCK_VERSION"] = __version__
     env["PS1"] = f"(airlock:{root.name}) \\w $ "
     # Guarded git wrapper (Task 1.4): shadow `git` inside the sandbox so the
     # push/checkout/config guardrails apply before the real git runs.
     env["PATH"] = f"{wrapper_bin_dir()}{os.pathsep}{env.get('PATH', '')}"
 
     shell = env.get("SHELL", "/bin/bash")
-    subprocess.run([shell], cwd=sandbox_path, env=env)
+    # Only env + ZDOTDIR: no wrapper around the shell command. The shim is
+    # installed for zsh only and removed as soon as the subshell exits.
+    with sandbox_zdotdir(sandbox_path, env, shell=shell):
+        subprocess.run([shell], cwd=sandbox_path, env=env)
 
     print("[i] Exited sandbox.")
     return 0

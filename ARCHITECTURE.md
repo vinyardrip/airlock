@@ -23,10 +23,14 @@ One-page map of why `airlock` is built the way it is. For daily usage see
 `airlock enter` is a plain subshell (the user's `$SHELL`) launched in the
 sandbox with:
 
-- `AIRLOCK_ACTIVE=1` and `AIRLOCK_MAIN=<project root>` — the reliable markers
-  (custom prompt themes may override `PS1`, they cannot override the env);
+- `AIRLOCK_ACTIVE=1`, `AIRLOCK_MAIN=<project root>`, `AIRLOCK_SANDBOX`,
+  `AIRLOCK_BASE_SHA`, `AIRLOCK_BASE_REF` and `AIRLOCK_VERSION` — the reliable
+  markers, inherited by every child process including tmux and nested shells;
 - `airlock/bin` prepended to `PATH`, so `git` resolves to the wrapper;
-- a best-effort `PS1` marker (`(airlock:<project>)`).
+- for zsh only, `ZDOTDIR` points to a generated shim that replaces the prompt
+  with a bright-red `sb:<id> v<ver> <sha>` segment and sets an OSC 2 title.
+  The user's `.zshrc` is not sourced; the shim is deleted on exit, so the
+  home-shell prompt is never touched. mise is activated by the shim itself.
 
 There is no daemon and no lock file. "Pausing" is simply leaving the subshell —
 the sandbox directory keeps all work, committed or not.

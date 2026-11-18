@@ -68,13 +68,16 @@ airlock enter
 
 The project is cloned into `~/sandboxes/<project>_<id>`, pinned tool versions
 are installed (`mise install`), and you land in a subshell with
-`AIRLOCK_ACTIVE=1` and `AIRLOCK_MAIN` set, and with the guarded git wrapper
-(`airlock/bin`) prepended to `PATH`. A `(airlock:myproject)` marker is also
-set in `PS1`, but custom prompt themes (e.g. Powerlevel10k) often override it
-— the environment variables are the reliable marker. Everything you do
-happens in the clone. The main working tree is protected: `git
-checkout`/`switch` are blocked there, pushes go only to the sandbox's private
-bare remote, and repo-level git hooks are neutralized.
+`AIRLOCK_ACTIVE=1`, `AIRLOCK_MAIN`, `AIRLOCK_SANDBOX`, `AIRLOCK_BASE_SHA`,
+`AIRLOCK_BASE_REF` and `AIRLOCK_VERSION` set, and with the guarded git wrapper
+(`airlock/bin`) prepended to `PATH`. For zsh, airlock points `ZDOTDIR` at a
+generated shim and owns the prompt: a bright-red `sb:<id> v<ver> <sha>`
+segment (with `*` for uncommitted changes and `base+N` when the main copy has
+advanced) plus an OSC 2 window title. The user's `.zshrc` is not sourced;
+the shim is removed when the subshell exits. Everything you do happens in the
+clone. The main working tree is protected: `git checkout`/`switch` are blocked
+there, pushes go only to the sandbox's private bare remote, and repo-level git
+hooks are neutralized.
 
 ### 2. Know your versions (optional)
 
@@ -226,10 +229,13 @@ airlock enter
 
 Проект клонируется в `~/sandboxes/<проект>_<id>`, устанавливаются закреплённые
 версии инструментов (`mise install`), и открывается подоболочка с переменными
-`AIRLOCK_ACTIVE=1` и `AIRLOCK_MAIN`, а в начало `PATH` добавляется защищающая
-git-обёртка (`airlock/bin`). Метка `(airlock:myproject)` выставляется в `PS1`,
-но пользовательские темы промпта (например, Powerlevel10k) часто её
-перебивают — надёжный признак песочницы именно переменные окружения. Всё, что
+`AIRLOCK_ACTIVE=1`, `AIRLOCK_MAIN`, `AIRLOCK_SANDBOX`, `AIRLOCK_BASE_SHA`,
+`AIRLOCK_BASE_REF` и `AIRLOCK_VERSION`, а в начало `PATH` добавляется
+защищающая git-обёртка (`airlock/bin`). Для zsh airlock выставляет `ZDOTDIR`
+на сгенерированный шим и полностью владеет промптом: ярко-красный сегмент
+`sb:<id> v<ver> <sha>` (`*` при незакоммиченных изменениях, `base+N` если
+основная копия ушла вперёд) и заголовок окна через OSC 2. Пользовательский
+`.zshrc` не сорсится, шим удаляется при выходе из подоболочки. Всё, что
 вы делаете, происходит в клоне. Основное рабочее дерево защищено: `git
 checkout`/`switch` там заблокированы, push уходит только в приватный
 bare-remote песочницы, хуки git в репозитории отключены.
