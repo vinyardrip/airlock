@@ -70,6 +70,13 @@ def _default_confirm() -> bool:
     return answer in ("y", "yes")
 
 
+def _default_behind_confirm() -> bool:
+    """Extra [y/N] prompt when the sandbox is behind main."""
+    print("Still merge anyway? [y/N]: ", end="", flush=True)
+    answer = sys.stdin.readline().strip().lower()
+    return answer in ("y", "yes")
+
+
 def _run_mise_install(root: Path) -> None:
     """Run `mise install` in root; never fail the merge over it."""
     try:
@@ -93,11 +100,14 @@ def merge_sandbox(
     project_root: Path | None = None,
     home: Path | None = None,
     confirm: Confirm | None = None,
+    behind_confirm: Confirm | None = None,
 ) -> int:
     """Merge sandbox `<project>_<id>` into its main project. Returns exit code.
 
     `project_root` defaults to detect_project_root() (the caller's cwd);
     `confirm` defaults to an interactive [y/N] prompt (injectable for tests).
+    A sandbox behind main gets an extra warning + confirmation via
+    `behind_confirm` before anything is merged.
     """
     try:
         project_name, sandbox_id = parse_sandbox_name(name)
@@ -148,10 +158,25 @@ def merge_sandbox(
         )
 
     ahead = _git_out(["rev-list", "--count", "HEAD..FETCH_HEAD"], root).strip()
+    behind_confirmed = False
     if ahead == "0":
-        print("[i] Nothing to merge: the sandbox branch has no new commits.")
-        return 0
-    print(f"[i] {ahead} commit(s) will be merged.")
+        behind = _git_out(["rev-list", "--count", "FETCH_HEAD..HEAD"], root).strip()
+        if behind == "0":
+            print("[i] Nothing to merge: the sandbox branch has no new commits.")
+            return 0
+        # FETCH_HEAD is an ancestor of HEAD: the sandbox holds no new work.
+        print(
+            "[!] This sandbox is behind main. "
+            "Merging it will not bring new changes (or will revert)."
+        )
+        if behind_confirm is None:
+            behind_confirm = _default_behind_confirm
+        if not behind_confirm():
+            print("[i] Aborted; nothing merged.")
+            return 1
+        behind_confirmed = True
+    else:
+        print(f"[i] {ahead} commit(s) will be merged.")
 
     stat = _git_out(["diff", "--stat", "HEAD...FETCH_HEAD"], root).rstrip("\n")
     if stat:
@@ -174,11 +199,12 @@ def merge_sandbox(
         ["diff", "--name-only", "HEAD...FETCH_HEAD", "--", *RUNTIME_CONFIG_FILES], root
     ).split()
 
-    if confirm is None:
-        confirm = _default_confirm
-    if not confirm():
-        print("[i] Aborted; nothing merged.")
-        return 1
+    if not behind_confirmed:
+        if confirm is None:
+            confirm = _default_confirm
+        if not confirm():
+            print("[i] Aborted; nothing merged.")
+            return 1
 
     merge = _run(["git", "merge", "FETCH_HEAD"], cwd=root)
     if merge.returncode != 0:

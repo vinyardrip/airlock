@@ -169,6 +169,47 @@ def test_nothing_to_merge_when_sandbox_has_no_commits(project_pair, capsys):
     assert "[y/N]" not in out  # no prompt when there is nothing to confirm
 
 
+def _advance_main(main: Path) -> None:
+    (main / "code.py").write_text("print('main advanced')\n")
+    _commit_all(main, "advance main")
+
+
+def test_behind_sandbox_warns_and_can_be_aborted(project_pair, capsys):
+    main, sandbox = project_pair
+    _advance_main(main)
+
+    rc = merge_sandbox(sandbox.name, project_root=main, behind_confirm=lambda: False)
+
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "This sandbox is behind main" in out
+    assert "Merging it will not bring new changes (or will revert)." in out
+    assert "Aborted" in out
+    assert (main / "code.py").read_text() == "print('main advanced')\n"
+
+
+def test_behind_sandbox_confirmed_skips_regular_prompt(project_pair, capsys):
+    main, sandbox = project_pair
+    _advance_main(main)
+    confirm_calls = []
+
+    def should_not_confirm():
+        confirm_calls.append(True)
+        return True
+
+    rc = merge_sandbox(
+        sandbox.name,
+        project_root=main,
+        behind_confirm=lambda: True,
+        confirm=should_not_confirm,
+    )
+
+    assert rc == 0
+    assert not confirm_calls  # the behind warning already carried the confirmation
+    assert "This sandbox is behind main" in capsys.readouterr().out
+    assert (main / "code.py").read_text() == "print('main advanced')\n"
+
+
 # --- guards ------------------------------------------------------------------------
 
 

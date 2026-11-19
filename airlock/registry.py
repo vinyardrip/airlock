@@ -1,7 +1,8 @@
 """Sandbox listing, selection and removal (Task 1.6 + smart selection).
 
 `airlock list` — every sandbox under <home>/sandboxes/ as an aligned table
-(Project, ID, Branch, Status) where Status is [clean] or [dirty].
+(Project, ID, Created, Branch, Status), newest first, where Status is [clean]
+or [dirty].
 
 `airlock clean <project>_<id>` — deletes the sandbox directory, refusing
 while the tree is dirty or the sandbox branch has commits not pushed to the
@@ -11,6 +12,8 @@ even a fully clean sandbox is never deleted without that confirmation.
 `resolve_sandbox` — shared smart selection for merge/clean: an omitted or
 partial argument is resolved against the sandboxes of the current project,
 auto-selecting when unambiguous and offering a numbered list otherwise.
+Sandboxes are always ordered newest first, so the default (1) is the latest
+work rather than the oldest archive.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
 
@@ -38,12 +42,34 @@ class CleanError(Exception):
     """Raised when `airlock clean` must refuse."""
 
 
+_ID_FORMAT = "%Y%m%d_%H%M%S"
+
+
 class SandboxInfo(NamedTuple):
     name: str  # full directory name: <project>_<id>[_<n>]
     project: str
     id: str
     branch: str
     status: str  # "[clean]" / "[dirty]" / "[no-git]"
+    created: str = ""  # human-readable "YYYY-MM-DD HH:MM" from the id
+
+
+def _created_label(sandbox_id: str) -> str:
+    """Turn a sandbox id (YYYYMMDD_HHMMSS) into a readable timestamp."""
+    try:
+        return datetime.strptime(sandbox_id, _ID_FORMAT).strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return "unknown"
+
+
+def _sort_key(info: SandboxInfo) -> tuple[str, float, str]:
+    """Project ascending, then newest sandbox first (negated timestamp)."""
+    try:
+        _project, sandbox_id = parse_sandbox_name(info.name)
+        timestamp = datetime.strptime(sandbox_id, _ID_FORMAT).timestamp()
+    except (SandboxError, ValueError):
+        timestamp = 0.0
+    return (info.project, -timestamp, info.name)
 
 
 def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -88,15 +114,21 @@ def list_sandboxes(home: Path | None = None) -> tuple[list[SandboxInfo], int]:
         # Display the id as it appears in the directory name (counter
         # included), so same-second sandboxes remain distinguishable.
         display_id = entry.name[len(project) + 1 :]
-        infos.append(SandboxInfo(entry.name, project, display_id, branch, status))
-    infos.sort(key=lambda info: (info.project, info.id, info.name))
+        infos.append(
+            SandboxInfo(
+                entry.name, project, display_id, branch, status, _created_label(_sandbox_id)
+            )
+        )
+    infos.sort(key=_sort_key)
     return infos, skipped
 
 
 def format_sandbox_table(infos: list[SandboxInfo]) -> str:
-    """Aligned table with headers Project, ID, Branch, Status."""
-    headers = ("Project", "ID", "Branch", "Status")
-    rows = [(info.project, info.id, info.branch, info.status) for info in infos]
+    """Aligned table with headers Project, ID, Created, Branch, Status."""
+    headers = ("Project", "ID", "Created", "Branch", "Status")
+    rows = [
+        (info.project, info.id, info.created, info.branch, info.status) for info in infos
+    ]
     widths = [
         max([len(header), *[len(row[col]) for row in rows]])
         for col, header in enumerate(headers)
@@ -196,11 +228,13 @@ def resolve_sandbox(
     """Resolve an omitted or partial sandbox argument to one sandbox.
 
     - arg is None: restrict to sandboxes of `current_project`; a single one
-      is auto-selected, several are offered as a numbered list (Enter -> 1).
+      is auto-selected, several are offered as a numbered list. The list is
+      newest first, so Enter -> 1 picks the latest sandbox.
     - arg given: substring match against sandbox names; one exact match is
       returned silently, a single partial match is auto-selected with a
       notice, several matches are offered as a numbered list.
 
+    Selecting anything but the newest entry requires an extra [y/N] confirm.
     Ctrl+C / EOF abort with "[i] Aborted.". Returns None (after printing an
     [err]/[i] line) when nothing matches or the user aborted.
     """
@@ -237,15 +271,32 @@ def resolve_sandbox(
     return _select_interactive(candidates, f"Multiple sandboxes match '{arg}'", input_fn)
 
 
+_OLDER_WARNING = (
+    "[!] Warning: You selected an older sandbox. "
+    "Newer sandboxes exist. Are you sure? [y/N]: "
+)
+
+
+def _yellow(text: str) -> str:
+    """Colour the warning yellow when stdout is a terminal."""
+    if sys.stdout.isatty():
+        return f"\033[33m{text}\033[0m"
+    return text
+
+
 def _select_interactive(
     candidates: list[SandboxInfo],
     header: str,
     input_fn: Callable[[str], str] | None,
 ) -> SandboxInfo | None:
-    """Numbered picker; empty input picks 1, invalid input re-prompts."""
+    """Numbered picker (newest first); Enter picks 1, invalid input re-prompts."""
     print(f"[i] {header}:")
     for number, info in enumerate(candidates, 1):
-        print(f"  {number}) {info.name}  {info.branch}  {info.status}")
+        latest = "  [latest]" if number == 1 else ""
+        print(
+            f"  {number}) {info.name}{latest}  {info.created}  "
+            f"{info.branch}  {info.status}"
+        )
     if input_fn is None:
         input_fn = input
     while True:
@@ -258,5 +309,17 @@ def _select_interactive(
         if not raw:
             return candidates[0]
         if raw.isdigit() and 1 <= int(raw) <= len(candidates):
-            return candidates[int(raw) - 1]
+            selected = candidates[int(raw) - 1]
+            if selected is candidates[0]:
+                return selected
+            # Anything below the newest entry can clobber fresher work.
+            try:
+                answer = input_fn(_yellow(_OLDER_WARNING))
+            except (EOFError, KeyboardInterrupt):
+                print("\n[i] Aborted.")
+                return None
+            if answer.strip().lower() in ("y", "yes"):
+                return selected
+            print("[i] Aborted; older sandbox not selected.")
+            return None
         print(f"[!] invalid selection: {raw!r}", file=sys.stderr)

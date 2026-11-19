@@ -14,6 +14,7 @@ import pytest
 
 import airlock.cli as cli
 import airlock.registry as registry_mod
+import airlock.sandbox as sandbox_mod
 from airlock.registry import (
     CleanError,
     clean_sandbox,
@@ -110,19 +111,41 @@ def test_list_sorts_by_project_and_skips_foreign_entries(project_with_sandbox, f
     assert [info.project for info in infos] == ["aaaproj", PROJECT_NAME]
 
 
+def test_list_is_sorted_newest_first_with_readable_created(fake_home, tmp_path, monkeypatch):
+    main = tmp_path / PROJECT_NAME
+    main.mkdir()
+    _git("init", "-q", cwd=main)
+    (main / "code.py").write_text("print('v1')\n")
+    _commit_all(main, "initial commit")
+
+    monkeypatch.setattr(sandbox_mod, "new_sandbox_id", lambda: "20261107_003629")
+    older = create_sandbox(main, PROJECT_NAME)
+    monkeypatch.setattr(sandbox_mod, "new_sandbox_id", lambda: "20261119_042134")
+    newer = create_sandbox(main, PROJECT_NAME)
+
+    infos, skipped = list_sandboxes()
+
+    assert skipped == 0
+    assert [info.name for info in infos] == [newer.name, older.name]
+    assert [info.created for info in infos] == ["2026-11-19 04:21", "2026-11-07 00:36"]
+
+
 def test_format_table_headers_and_alignment(project_with_sandbox):
     _, sandbox = project_with_sandbox
     infos, _ = list_sandboxes()
 
     lines = format_sandbox_table(infos).splitlines()
 
-    assert lines[0].split() == ["Project", "ID", "Branch", "Status"]
+    assert lines[0].split() == ["Project", "ID", "Created", "Branch", "Status"]
     assert set(lines[1]) <= {"-", " "} and "---" in lines[1]
     # Every row's columns start at the same offsets as the header's.
-    header_cols = [lines[0].index(h) for h in ("Project", "ID", "Branch", "Status")]
+    header_cols = [
+        lines[0].index(h) for h in ("Project", "ID", "Created", "Branch", "Status")
+    ]
     info = infos[0]
     row_cols = [
-        lines[2].index(c) for c in (info.project, info.id, info.branch, info.status)
+        lines[2].index(c)
+        for c in (info.project, info.id, info.created, info.branch, info.status)
     ]
     assert row_cols == header_cols
 
@@ -130,7 +153,7 @@ def test_format_table_headers_and_alignment(project_with_sandbox):
 def test_format_table_with_no_rows():
     table = format_sandbox_table([])
 
-    assert table.splitlines()[0].split() == ["Project", "ID", "Branch", "Status"]
+    assert table.splitlines()[0].split() == ["Project", "ID", "Created", "Branch", "Status"]
 
 
 def test_cmd_list_prints_table(project_with_sandbox, capsys):
@@ -139,6 +162,7 @@ def test_cmd_list_prints_table(project_with_sandbox, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "Project" in out and "ID" in out and "Branch" in out and "Status" in out
+    assert "Created" in out
     assert "[clean]" in out
 
 

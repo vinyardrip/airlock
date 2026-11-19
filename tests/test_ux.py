@@ -93,28 +93,61 @@ def test_no_arg_auto_selects_single_sandbox(fake_home, main_repo, capsys):
     assert f"[i] Auto-selected sandbox: {sandbox.name}" in capsys.readouterr().out
 
 
-def test_no_arg_multiple_lists_and_defaults_to_first(fake_home, main_repo, two_sandboxes, capsys):
-    first, _ = two_sandboxes
+def test_no_arg_multiple_lists_newest_first_and_defaults_to_it(
+    fake_home, main_repo, two_sandboxes, capsys
+):
+    first, second = two_sandboxes  # first is older, second is newer
     chooser = fake_input("")
 
     selected = resolve_sandbox(None, current_project=PROJECT_NAME, home=fake_home, input_fn=chooser)
 
-    assert selected is not None and selected.name == first.name
+    assert selected is not None and selected.name == second.name
     out = capsys.readouterr().out
     assert "[i] Multiple sandboxes for 'uxproj':" in out
-    assert f"  1) {first.name}" in out
-    assert f"  2) uxproj_{SECOND_ID}" in out
+    assert f"  1) {second.name}  [latest]  2026-11-07 01:00" in out
+    assert f"  2) {first.name}  2026-11-07 00:36" in out
+    assert out.index(second.name) < out.index(first.name)
     assert chooser.calls == ["Select sandbox [1-2] (default 1): "]
 
 
-def test_no_arg_multiple_explicit_choice(fake_home, main_repo, two_sandboxes, capsys):
+def test_no_arg_multiple_explicit_choice_of_newest_needs_no_confirm(
+    fake_home, main_repo, two_sandboxes, capsys
+):
     _, second = two_sandboxes
+    chooser = fake_input("1")
 
     selected = resolve_sandbox(
-        None, current_project=PROJECT_NAME, home=fake_home, input_fn=fake_input("2")
+        None, current_project=PROJECT_NAME, home=fake_home, input_fn=chooser
     )
 
     assert selected is not None and selected.name == second.name
+    assert len(chooser.calls) == 1
+    assert "Warning: You selected an older sandbox" not in capsys.readouterr().out
+
+
+def test_older_choice_warns_and_confirms(fake_home, main_repo, two_sandboxes, capsys):
+    first, _ = two_sandboxes
+    chooser = fake_input("2", "y")
+
+    selected = resolve_sandbox(
+        None, current_project=PROJECT_NAME, home=fake_home, input_fn=chooser
+    )
+
+    assert selected is not None and selected.name == first.name
+    assert len(chooser.calls) == 2
+    assert "Warning: You selected an older sandbox" in chooser.calls[1]
+    assert "Are you sure? [y/N]" in chooser.calls[1]
+
+
+def test_older_choice_declined_aborts(fake_home, main_repo, two_sandboxes, capsys):
+    chooser = fake_input("2", "n")
+
+    selected = resolve_sandbox(
+        None, current_project=PROJECT_NAME, home=fake_home, input_fn=chooser
+    )
+
+    assert selected is None
+    assert "Aborted; older sandbox not selected" in capsys.readouterr().out
 
 
 def test_no_arg_eof_aborts(fake_home, main_repo, two_sandboxes, capsys):
@@ -142,14 +175,14 @@ def test_no_arg_ctrl_c_aborts(fake_home, main_repo, two_sandboxes, capsys):
 
 
 def test_no_arg_invalid_input_reprompts(fake_home, main_repo, two_sandboxes, capsys):
-    chooser = fake_input("abc", "9", "2")
+    chooser = fake_input("abc", "9", "2", "y")
 
     selected = resolve_sandbox(
         None, current_project=PROJECT_NAME, home=fake_home, input_fn=chooser
     )
 
-    assert selected is not None and selected.name == f"uxproj_{SECOND_ID}"
-    assert len(chooser.calls) == 3
+    assert selected is not None and selected.name == f"uxproj_{FIRST_ID}"
+    assert len(chooser.calls) == 4
     err = capsys.readouterr().err
     assert "invalid selection: 'abc'" in err
     assert "invalid selection: '9'" in err
@@ -187,10 +220,11 @@ def test_partial_id_multiple_matches_lists_them(fake_home, main_repo, two_sandbo
 
     selected = resolve_sandbox("20261107", home=fake_home, input_fn=chooser)
 
-    assert selected is not None and selected.name == f"uxproj_{FIRST_ID}"
+    assert selected is not None and selected.name == f"uxproj_{SECOND_ID}"
     out = capsys.readouterr().out
     assert "[i] Multiple sandboxes match '20261107':" in out
-    assert f"  2) uxproj_{SECOND_ID}" in out
+    assert f"  1) uxproj_{SECOND_ID}  [latest]" in out
+    assert f"  2) uxproj_{FIRST_ID}" in out
     assert chooser.calls == ["Select sandbox [1-2] (default 1): "]
 
 
@@ -220,7 +254,8 @@ def test_cmd_merge_auto_selects_and_merges(fake_home, main_repo, monkeypatch, ca
 
 def test_cmd_merge_multiple_uses_piped_stdin_choice(fake_home, main_repo, two_sandboxes, monkeypatch):
     monkeypatch.setattr(Path, "cwd", lambda: main_repo)
-    monkeypatch.setattr(sys, "stdin", io.StringIO("2\n"))
+    # "2" is now the older sandbox, so the extra confirmation is required.
+    monkeypatch.setattr(sys, "stdin", io.StringIO("2\ny\n"))
     captured = {}
 
     def fake_merge(name):
@@ -230,7 +265,7 @@ def test_cmd_merge_multiple_uses_piped_stdin_choice(fake_home, main_repo, two_sa
     monkeypatch.setattr(cli, "merge_sandbox", fake_merge)
 
     assert cli.cmd_merge(None) == 0
-    assert captured["name"] == f"uxproj_{SECOND_ID}"
+    assert captured["name"] == f"uxproj_{FIRST_ID}"
 
 
 def test_cmd_clean_auto_selects_and_cleans(fake_home, main_repo, monkeypatch, capsys):

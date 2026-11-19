@@ -63,9 +63,15 @@ a normal git workflow even if it ends up on the global `PATH`.
 pushes the sandbox branch to the bare remote, fetches it into the main repo,
 shows a `--stat` summary plus a separate diff restricted to version configs
 (`.tool-versions`, `mise.toml`, `pnpm-lock.yaml`, `package.json`,
-`pyproject.toml`), prompts y/N (Enter aborts), then merges `FETCH_HEAD`. If
+`pyproject.toml`), prompts y/N (Enter aborts), then merges `FETCH_HEAD`. If the sandbox branch is
+an ancestor of main (nothing new to bring in), the "nothing to merge" no-op is
+replaced by an explicit behind-main warning plus its own confirmation. If
 runtime configs (`.tool-versions`, `mise.toml`) changed, `mise install` runs —
 best effort: a missing or failing mise is a warning, never a failed merge.
+
+Sandbox lists (`list` and the `merge`/`clean` picker) are ordered newest first
+by the timestamp encoded in the sandbox id; the picker marks entry 1 as
+`[latest]` and requires an extra confirmation when an older entry is chosen.
 
 Publishing is deliberately not part of the merge: sandboxes cannot push to
 GitHub, so the reviewed main tree is the only place a `git push` can originate.

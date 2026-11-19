@@ -38,7 +38,7 @@ immediately — no reinstall step. One exception: if the update changed
 To see which version you are on:
 
 ```text
-airlock --version       # e.g. airlock 0.1.0
+airlock --version       # e.g. airlock 1.1.0
 git log -1              # the last commit pulled into the repo
 ```
 
@@ -147,9 +147,17 @@ separate diff of version configs), and asks:
 Proceed with merge? [y/N]:
 ```
 
-Enter or `n` aborts without touching anything; `y` merges. If
-`.tool-versions`/`mise.toml` changed, `mise install` runs in the main project
-afterwards (a missing mise is a warning, never a failure).
+Enter or `n` aborts without touching anything; `y` merges. If the selected
+sandbox is behind `main` (its branch is an ancestor of the current `HEAD`),
+airlock warns and requires one more confirmation instead of silently doing
+nothing:
+
+```text
+[!] This sandbox is behind main. Merging it will not bring new changes (or will revert).
+```
+
+If `.tool-versions`/`mise.toml` changed, `mise install` runs in the main
+project afterwards (a missing mise is a warning, never a failure).
 
 Finally, clean up:
 
@@ -177,8 +185,17 @@ happens from the main repo, where you can see exactly what you are pushing.
 
 You almost never type the full id. Without an argument, `merge`/`clean` look
 at the current project: one sandbox is auto-selected
-(`[i] Auto-selected sandbox: ...`), several produce a numbered list where
-Enter picks the first. A partial id works too: `airlock merge 003629`.
+(`[i] Auto-selected sandbox: ...`), several produce a numbered list **sorted
+newest first** — the latest sandbox is `1) ... [latest]` with its creation
+time, so Enter picks the freshest work, not an old archive. Choosing an older
+entry asks for an extra confirmation:
+
+```text
+[!] Warning: You selected an older sandbox. Newer sandboxes exist. Are you sure? [y/N]:
+```
+
+A partial id works too: `airlock merge 003629`. `airlock list` uses the same
+newest-first order and adds a `Created` column (`2026-11-19 04:21`).
 
 ## Command reference
 
@@ -186,7 +203,7 @@ Enter picks the first. A partial id works too: `airlock merge 003629`.
 | --- | --- |
 | `airlock enter` | Clone the current project into `~/sandboxes/<project>_<id>`, set up the bare remote, open a guarded subshell. |
 | `airlock merge [<id>]` | Push the sandbox branch, show the version-config diff separately, confirm (y/N), merge into the main repo; runs `mise install` if version configs changed. |
-| `airlock list` | All sandboxes with project, id, branch and clean/dirty status. |
+| `airlock list` | All sandboxes (newest first) with project, id, creation date, branch and clean/dirty status. |
 | `airlock clean [<id>]` | Delete a sandbox; refuses when the tree is dirty or commits are unpushed (`--force` bypasses the checks but still asks to type `yes`). |
 | `airlock check` | Compare pinned tool versions with `mise latest`; flags outdated pins and tools used by the project but not pinned. |
 | `airlock update <tool>` | Inside a sandbox only: bump a pinned tool to `mise latest`, run `mise install`, run the project's tests. |
@@ -307,9 +324,16 @@ diff конфигураций версий, затем спрашивает:
 Proceed with merge? [y/N]:
 ```
 
-Enter или `n` — отмена без каких-либо изменений; `y` — слияние. Если менялись
-`.tool-versions`/`mise.toml`, после слияния в основном проекте выполнится
-`mise install` (отсутствующий mise — предупреждение, а не ошибка).
+Enter или `n` — отмена без каких-либо изменений; `y` — слияние. Если выбранная
+песочница отстаёт от `main` (её ветка — предок текущего `HEAD`), airlock
+предупредит и потребует ещё одно подтверждение вместо тихого «нечего сливать»:
+
+```text
+[!] This sandbox is behind main. Merging it will not bring new changes (or will revert).
+```
+
+Если менялись `.tool-versions`/`mise.toml`, после слияния в основном проекте
+выполнится `mise install` (отсутствующий mise — предупреждение, а не ошибка).
 
 В конце уберите за собой:
 
@@ -338,8 +362,17 @@ git push
 
 Полный id вводить не нужно. Без аргумента `merge`/`clean` смотрят на текущий
 проект: одна песочница выбирается автоматически (`[i] Auto-selected
-sandbox: ...`), несколько — нумерованный список, Enter выбирает первую.
-Работает и частичный id: `airlock merge 003629`.
+sandbox: ...`), несколько — нумерованный список **от новых к старым**: самая
+свежая песочница — это `1) ... [latest]` с датой создания, поэтому Enter
+выбирает самую свежую работу, а не старый архив. При выборе более старой
+песочницы требуется дополнительное подтверждение:
+
+```text
+[!] Warning: You selected an older sandbox. Newer sandboxes exist. Are you sure? [y/N]:
+```
+
+Работает и частичный id: `airlock merge 003629`. `airlock list` использует тот
+же порядок и добавляет колонку `Created` (`2026-11-19 04:21`).
 
 ## Самобутстрап: airlock тестирует сам себя в песочнице
 
@@ -390,7 +423,7 @@ git pull
 Текущая версия:
 
 ```text
-airlock --version       # например: airlock 0.1.0
+airlock --version       # например: airlock 1.1.0
 git log -1              # последний коммит, попавший в репозиторий
 ```
 
