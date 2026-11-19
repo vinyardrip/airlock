@@ -70,8 +70,11 @@ runtime configs (`.tool-versions`, `mise.toml`) changed, `mise install` runs —
 best effort: a missing or failing mise is a warning, never a failed merge.
 
 Sandbox lists (`list` and the `merge`/`clean` picker) are ordered newest first
-by the timestamp encoded in the sandbox id; the picker marks entry 1 as
-`[latest]` and requires an extra confirmation when an older entry is chosen.
+by the timestamp encoded in the sandbox id. The picker keeps entry 1 as the
+default (the newest sandbox) and annotates every entry with its state and HEAD
+commit — short hash, exact tag when present, truncated subject and creation
+date — so the merge target is explicit. Choosing an older entry still requires
+an extra confirmation.
 
 Publishing is deliberately not part of the merge: sandboxes cannot push to
 GitHub, so the reviewed main tree is the only place a `git push` can originate.

@@ -257,7 +257,7 @@ def resolve_sandbox(
             print(f"[i] Auto-selected sandbox: {candidates[0].name}")
             return candidates[0]
         return _select_interactive(
-            candidates, f"Multiple sandboxes for '{current_project}'", input_fn
+            candidates, f"Multiple sandboxes for '{current_project}'", input_fn, home
         )
 
     candidates = [info for info in infos if arg in info.name]
@@ -268,7 +268,7 @@ def resolve_sandbox(
         if candidates[0].name != arg:
             print(f"[i] Auto-selected sandbox: {candidates[0].name}")
         return candidates[0]
-    return _select_interactive(candidates, f"Multiple sandboxes match '{arg}'", input_fn)
+    return _select_interactive(candidates, f"Multiple sandboxes match '{arg}'", input_fn, home)
 
 
 _OLDER_WARNING = (
@@ -284,19 +284,42 @@ def _yellow(text: str) -> str:
     return text
 
 
+_SUBJECT_MAX_LEN = 60
+
+
+def _head_summary(sandbox: Path) -> str:
+    """Describe a sandbox's HEAD as '<short-hash> [tag] <subject>'.
+
+    Git failures (no commits, broken repository) are tolerated so the picker
+    can still list every sandbox instead of crashing.
+    """
+    log = _git_out(["log", "-1", "--format=%h %s"], sandbox)
+    if not log:
+        return "(no commits)"
+    short_hash, _, subject = log.partition(" ")
+    if len(subject) > _SUBJECT_MAX_LEN:
+        subject = subject[: _SUBJECT_MAX_LEN - 3].rstrip() + "..."
+    tag = _git_out(["describe", "--tags", "--exact-match"], sandbox)
+    parts = [short_hash]
+    if tag:
+        parts.append(tag.splitlines()[0])
+    parts.append(subject)
+    return " ".join(part for part in parts if part).rstrip()
+
+
 def _select_interactive(
     candidates: list[SandboxInfo],
     header: str,
     input_fn: Callable[[str], str] | None,
+    home: Path | None = None,
 ) -> SandboxInfo | None:
     """Numbered picker (newest first); Enter picks 1, invalid input re-prompts."""
+    root = sandbox_root(home)
     print(f"[i] {header}:")
     for number, info in enumerate(candidates, 1):
-        latest = "  [latest]" if number == 1 else ""
-        print(
-            f"  {number}) {info.name}{latest}  {info.created}  "
-            f"{info.branch}  {info.status}"
-        )
+        head = _head_summary(root / info.name)
+        created = info.created[:10]  # YYYY-MM-DD; "unknown" stays as-is
+        print(f"  {number}) {info.name} {info.status}  -  {head} ({created})")
     if input_fn is None:
         input_fn = input
     while True:

@@ -103,9 +103,10 @@ def test_no_arg_multiple_lists_newest_first_and_defaults_to_it(
 
     assert selected is not None and selected.name == second.name
     out = capsys.readouterr().out
+    sha = _git("rev-parse", "--short", "HEAD", cwd=main_repo)
     assert "[i] Multiple sandboxes for 'uxproj':" in out
-    assert f"  1) {second.name}  [latest]  2026-11-07 01:00" in out
-    assert f"  2) {first.name}  2026-11-07 00:36" in out
+    assert f"  1) {second.name} [clean]  -  {sha} initial commit (2026-11-07)" in out
+    assert f"  2) {first.name} [clean]  -  {sha} initial commit (2026-11-07)" in out
     assert out.index(second.name) < out.index(first.name)
     assert chooser.calls == ["Select sandbox [1-2] (default 1): "]
 
@@ -198,6 +199,55 @@ def test_no_arg_project_without_sandboxes_errors(fake_home, main_repo, two_sandb
     assert "no sandboxes found for project 'otherproj'" in capsys.readouterr().err
 
 
+# --- HEAD context in the picker ------------------------------------------------------
+
+
+def test_picker_shows_head_hash_tag_and_subject(fake_home, main_repo, two_sandboxes, capsys):
+    _, second = two_sandboxes
+    (second / "code.py").write_text("print('v2')\n")
+    _commit_all(second, "feat: add prompt marker")
+    _git("tag", "v9.9.9", cwd=second)
+
+    chooser = fake_input("")
+    selected = resolve_sandbox(None, current_project=PROJECT_NAME, home=fake_home, input_fn=chooser)
+
+    assert selected is not None and selected.name == second.name
+    out = capsys.readouterr().out
+    sha = _git("rev-parse", "--short", "HEAD", cwd=second)
+    assert f"  1) {second.name} [clean]  -  {sha} v9.9.9 feat: add prompt marker (2026-11-07)" in out
+    # Untagged sandbox: the hash and subject are still shown, without a tag.
+    older_line = out.splitlines()[2]
+    assert f"  2) uxproj_{FIRST_ID} [clean]  -  " in older_line
+    assert "v9.9.9" not in older_line
+
+
+def test_picker_truncates_long_subject(fake_home, main_repo, two_sandboxes, capsys):
+    _, second = two_sandboxes
+    subject = "feat: " + "x" * 100
+    (second / "code.py").write_text("print('long')\n")
+    _commit_all(second, subject)
+
+    resolve_sandbox(None, current_project=PROJECT_NAME, home=fake_home, input_fn=fake_input(""))
+
+    out = capsys.readouterr().out
+    assert subject not in out
+    assert "..." in out
+    assert "feat: xxxx" in out
+
+
+def test_picker_tolerates_sandbox_without_git(fake_home, main_repo, two_sandboxes, capsys):
+    broken = fake_home / "sandboxes" / f"{PROJECT_NAME}_20261108_000000"
+    broken.mkdir()
+
+    selected = resolve_sandbox(
+        None, current_project=PROJECT_NAME, home=fake_home, input_fn=fake_input("")
+    )
+
+    assert selected is not None and selected.name == broken.name
+    out = capsys.readouterr().out
+    assert f"  1) {broken.name} [no-git]  -  (no commits) (2026-11-08)" in out
+
+
 # --- partial argument ---------------------------------------------------------------
 
 
@@ -223,8 +273,8 @@ def test_partial_id_multiple_matches_lists_them(fake_home, main_repo, two_sandbo
     assert selected is not None and selected.name == f"uxproj_{SECOND_ID}"
     out = capsys.readouterr().out
     assert "[i] Multiple sandboxes match '20261107':" in out
-    assert f"  1) uxproj_{SECOND_ID}  [latest]" in out
-    assert f"  2) uxproj_{FIRST_ID}" in out
+    assert f"  1) uxproj_{SECOND_ID} [clean]  -  " in out
+    assert f"  2) uxproj_{FIRST_ID} [clean]  -  " in out
     assert chooser.calls == ["Select sandbox [1-2] (default 1): "]
 
 

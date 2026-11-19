@@ -38,7 +38,7 @@ immediately — no reinstall step. One exception: if the update changed
 To see which version you are on:
 
 ```text
-airlock --version       # e.g. airlock 1.1.0
+airlock --version       # e.g. airlock 1.2.0
 git log -1              # the last commit pulled into the repo
 ```
 
@@ -186,9 +186,19 @@ happens from the main repo, where you can see exactly what you are pushing.
 You almost never type the full id. Without an argument, `merge`/`clean` look
 at the current project: one sandbox is auto-selected
 (`[i] Auto-selected sandbox: ...`), several produce a numbered list **sorted
-newest first** — the latest sandbox is `1) ... [latest]` with its creation
-time, so Enter picks the freshest work, not an old archive. Choosing an older
-entry asks for an extra confirmation:
+newest first** — entry 1 is the latest sandbox, so Enter picks the freshest
+work, not an old archive. Each line shows the sandbox state plus its HEAD
+commit (short hash, exact semver tag when present, truncated subject and
+creation date), so it is clear what would be merged:
+
+```text
+[i] Multiple sandboxes for 'airlock':
+  1) airlock_20261119_042134 [clean]  -  4cf8d09 docs: align documentation (2026-11-19)
+  2) airlock_20261118_131233 [clean]  -  141dcdc v1.0.0 chore: release v1.0.0 (2026-11-18)
+Select sandbox [1-2] (default 1):
+```
+
+Choosing an older entry asks for an extra confirmation:
 
 ```text
 [!] Warning: You selected an older sandbox. Newer sandboxes exist. Are you sure? [y/N]:
@@ -362,10 +372,20 @@ git push
 
 Полный id вводить не нужно. Без аргумента `merge`/`clean` смотрят на текущий
 проект: одна песочница выбирается автоматически (`[i] Auto-selected
-sandbox: ...`), несколько — нумерованный список **от новых к старым**: самая
-свежая песочница — это `1) ... [latest]` с датой создания, поэтому Enter
-выбирает самую свежую работу, а не старый архив. При выборе более старой
-песочницы требуется дополнительное подтверждение:
+sandbox: ...`), несколько — нумерованный список **от новых к старым**: первая
+строка — самая свежая песочница, поэтому Enter выбирает самую свежую работу,
+а не старый архив. В каждой строке указано состояние песочницы и её HEAD
+(короткий хеш, точный semver-тег если есть, усечённое сообщение коммита и дата
+создания), чтобы было видно, что именно будет слито:
+
+```text
+[i] Multiple sandboxes for 'airlock':
+  1) airlock_20261119_042134 [clean]  -  4cf8d09 docs: align documentation (2026-11-19)
+  2) airlock_20261118_131233 [clean]  -  141dcdc v1.0.0 chore: release v1.0.0 (2026-11-18)
+Select sandbox [1-2] (default 1):
+```
+
+При выборе более старой песочницы требуется дополнительное подтверждение:
 
 ```text
 [!] Warning: You selected an older sandbox. Newer sandboxes exist. Are you sure? [y/N]:
@@ -423,7 +443,7 @@ git pull
 Текущая версия:
 
 ```text
-airlock --version       # например: airlock 1.1.0
+airlock --version       # например: airlock 1.2.0
 git log -1              # последний коммит, попавший в репозиторий
 ```
 
